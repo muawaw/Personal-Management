@@ -17,8 +17,45 @@ from backend.purchasing import (
 from backend.master_data import get_all_materials, get_all_locations
 
 
+@st.dialog("Confirm Deletion")
+def confirm_delete_purchase_dialog(purchase_id, purchase_number):
+    st.write(f"Are you sure you want to delete Purchase **#{purchase_number}** (ID: {purchase_id})?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Yes, Delete", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Deleting purchase..."):
+                    delete_purchase(purchase_id)
+                st.session_state.purchase_msg = ("success", "Purchase deleted successfully.")
+                if "purchase_action" in st.session_state and st.session_state.purchase_action[0] == purchase_id:
+                    del st.session_state.purchase_action
+                if "delete_purchase_target" in st.session_state:
+                    del st.session_state.delete_purchase_target
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Could not delete purchase: {exc}")
+    with col2:
+        if st.button("Cancel", use_container_width=True):
+            if "delete_purchase_target" in st.session_state:
+                del st.session_state.delete_purchase_target
+            st.rerun()
+
+
 def render():
     st.title("Purchase Input")
+
+    # Display feedback message after rerun if present
+    if "purchase_msg" in st.session_state:
+        msg_type, msg_text = st.session_state.pop("purchase_msg")
+        if msg_type == "success":
+            st.success(msg_text)
+        elif msg_type == "error":
+            st.error(msg_text)
+
+    # Check if delete modal was triggered
+    if "delete_purchase_target" in st.session_state:
+        target_id, target_num = st.session_state.delete_purchase_target
+        confirm_delete_purchase_dialog(target_id, target_num)
 
     material_options = get_all_materials()
     location_options = get_all_locations()
@@ -51,7 +88,7 @@ def render():
                 else:
                     try:
                         with st.spinner("Processing purchase..."):
-                            result = create_purchase(
+                            create_purchase(
                                 purchase_number=purchase_number,
                                 material_id=material_map[material_name],
                                 location_id=location_map[location_name],
@@ -59,8 +96,8 @@ def render():
                                 unit_price=unit_price,
                                 purchase_date=purchase_date,
                             )
-                        st.success("Purchase saved successfully.")
-                        st.json(result)
+                        st.session_state.purchase_msg = ("success", "Purchase saved successfully.")
+                        st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save purchase: {exc}")
 
@@ -110,7 +147,7 @@ def display_purchase_table(purchases, material_options, location_options):
         cols[1].write(row["purchase_number"])
         cols[2].write(material_lookup.get(row["material_id"], row["material_id"]))
         cols[3].write(location_lookup.get(row["location_id"], row["location_id"]))
-        # Render numeric/date values safely (DB may return Decimal/date types)
+        
         try:
             cols[4].write(float(row["quantity"]))
         except Exception:
@@ -119,6 +156,7 @@ def display_purchase_table(purchases, material_options, location_options):
             cols[5].write(f"Rp {float(row['unit_price']):,.2f}")
         except Exception:
             cols[5].write(row.get("unit_price", ""))
+
         purchase_date = row.get("purchase_date")
         try:
             if isinstance(purchase_date, date):
@@ -135,13 +173,8 @@ def display_purchase_table(purchases, material_options, location_options):
         if action_cols[1].button("Edit", key=f"edit_purchase_{row['purchase_id']}", help="Edit"):
             st.session_state.purchase_action = (row["purchase_id"], "edit")
         if action_cols[2].button("Delete", key=f"delete_purchase_{row['purchase_id']}", help="Delete"):
-            try:
-                with st.spinner("Deleting purchase..."):
-                    delete_purchase(row["purchase_id"])
-                st.success("Purchase deleted successfully.")
-                # Streamlit will rerun the script on user interaction; no experimental_rerun call used.
-            except Exception as exc:
-                st.error(f"Could not delete purchase: {exc}")
+            st.session_state.delete_purchase_target = (row["purchase_id"], row["purchase_number"])
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     if "purchase_action" in st.session_state:
@@ -172,6 +205,9 @@ def render_purchase_edit_form(details, material_options, location_options):
         "Select location",
     )
 
+    default_qty = float(str(details["quantity"])) if details.get("quantity") is not None else 0.0
+    default_price = float(str(details["unit_price"])) if details.get("unit_price") is not None else 0.0
+
     with st.form("purchase_edit_form"):
         purchase_number = st.text_input("Purchase Number", value=details["purchase_number"])
         material_name = st.selectbox(
@@ -185,10 +221,10 @@ def render_purchase_edit_form(details, material_options, location_options):
             index=(location_names.index(current_location) + 1 if current_location in location_names else 0),
         )
         quantity = st.number_input(
-            "Quantity", min_value=0.0, value=details["quantity"], step=0.1
+            "Quantity", min_value=0.0, value=default_qty, step=0.1
         )
         unit_price = st.number_input(
-            "Unit Price", min_value=0.0, value=details["unit_price"], step=1000.0, format="%.2f"
+            "Unit Price", min_value=0.0, value=default_price, step=1000.0, format="%.2f"
         )
         purchase_date = st.date_input("Purchase Date", value=details["purchase_date"])
         submitted = st.form_submit_button("Save Changes")
@@ -208,7 +244,8 @@ def render_purchase_edit_form(details, material_options, location_options):
                             unit_price=unit_price,
                             purchase_date=purchase_date,
                         )
-                    st.success("Purchase updated successfully.")
+                    st.session_state.purchase_msg = ("success", "Purchase updated successfully.")
                     del st.session_state.purchase_action
+                    st.rerun()
                 except Exception as exc:
                     st.error(f"Could not update purchase: {exc}")

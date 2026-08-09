@@ -15,6 +15,8 @@ from backend.dashboard import (
     get_dashboard_summary,
 )
 from frontend.operational_menu import purchase_input, sales_input
+from frontend.inventory_menu import inventory_input, stock_opname
+
 
 st.set_page_config(page_title="Kasir Dashboard", page_icon="📊", layout="wide")
 
@@ -44,7 +46,7 @@ with st.sidebar:
             st.session_state.page = "sales"
 
     with st.expander("Inventory Management", expanded=False):
-        if st.button("Inventory Input", use_container_width=True, key="nav_inventory"):
+        if st.button("Inventory Monitoring", use_container_width=True, key="nav_inventory"):
             st.session_state.page = "inventory"
         if st.button("Stock Opname", use_container_width=True, key="nav_stock"):
             st.session_state.page = "stock_opname"
@@ -166,11 +168,9 @@ elif page == "purchase":
 elif page == "sales":
     sales_input.render()
 elif page == "inventory":
-    st.subheader("Inventory Input")
-    st.info("Inventory form will be added here next.")
+    inventory_input.render()
 elif page == "stock_opname":
-    st.subheader("Stock Opname")
-    st.info("Stock opname form will be added here next.")
+    stock_opname.render()
 else:
     st.subheader("Master Data")
     st.info("Master data configuration will be added here next.")

@@ -1,19 +1,13 @@
 from typing import List, Dict, Any, Optional
-
 from psycopg2.extras import RealDictCursor
 
 from constant.config import get_db_connection, load_sql_queries_from_directory, STOCK_OPNAME_QUERIES_DIR
 from constant.error_handling import execute_query
 from constant.logger import logger
+from backend.inventory import upsert_inventory, get_inventory_by_material_and_location
 
 
-# Cache queries on startup
 QUERIES = load_sql_queries_from_directory(STOCK_OPNAME_QUERIES_DIR)
-
-
-# ==========================================
-# STOCK OPNAME LOGIC
-# ==========================================
 
 
 def create_stock_opname(
@@ -25,7 +19,6 @@ def create_stock_opname(
     stock_opname_date: str,
     notes: Optional[str] = None,
 ) -> Dict[str, Any]:
-
     logger.debug(
         "stock_opname.create_stock_opname params=%s",
         (material_id, location_id, system_qty, actual_qty, difference_qty, stock_opname_date, notes),
@@ -40,11 +33,16 @@ def create_stock_opname(
             )
             result = cur.fetchone()
         conn.commit()
-    return dict(result)
+
+    if result:
+        # Adjustment delta to set inventory stock exact to actual_qty
+        delta = float(actual_qty) - float(system_qty)
+        upsert_inventory(material_id, location_id, delta)
+
+    return dict(result) if result else {}
 
 
 def get_all_stock_opname() -> List[Dict[str, Any]]:
-    logger.debug("stock_opname.get_all_stock_opname")
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             execute_query("get_all_stock_opname", QUERIES["get_all_stock_opname"], None, cur)
@@ -53,7 +51,6 @@ def get_all_stock_opname() -> List[Dict[str, Any]]:
 
 
 def get_stock_opname_by_id(opname_id: int) -> Optional[Dict[str, Any]]:
-    logger.debug("stock_opname.get_stock_opname_by_id params=%s", (opname_id,))
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             execute_query("get_stock_opname_by_id", QUERIES["get_stock_opname_by_id"], (opname_id,), cur)
@@ -85,11 +82,18 @@ def update_stock_opname(
             )
             result = cur.fetchone()
         conn.commit()
+
+    if result:
+        # Re-sync current inventory level to match updated actual_qty
+        inv = get_inventory_by_material_and_location(material_id, location_id)
+        current_inv_stock = float(inv["stock_qty"]) if inv else 0.0
+        delta = float(actual_qty) - current_inv_stock
+        upsert_inventory(material_id, location_id, delta)
+
     return dict(result) if result else None
 
 
 def delete_stock_opname(opname_id: int) -> bool:
-    logger.debug("stock_opname.delete_stock_opname params=%s", (opname_id,))
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             execute_query("delete_stock_opname", QUERIES["delete_stock_opname"], (opname_id,), cur)
