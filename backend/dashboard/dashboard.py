@@ -90,12 +90,17 @@ def _build_dashboard_query_params(
     material_id: Optional[int],
     location_id: Optional[int],
 ) -> tuple[Any, ...]:
-    return tuple(
-        [start_date, start_date, start_date, start_date]
-        + [end_date, end_date, end_date, end_date]
-        + [material_id, material_id, material_id, material_id]
-        + [location_id, location_id, location_id, location_id]
+    # Each CTE (purchase_agg, sales_agg, stock_agg) expects 8 positional params in sequence:
+    # (%s IS NULL OR start_date >= %s) AND (%s IS NULL OR end_date <= %s)
+    # AND (%s IS NULL OR material_id = %s) AND (%s IS NULL OR location_id = %s)
+    cte_params = (
+        start_date, start_date,
+        end_date, end_date,
+        material_id, material_id,
+        location_id, location_id,
     )
+    # 3 CTEs x 8 parameters = 24 parameters in total
+    return cte_params * 3
 
 
 def get_dashboard_data(
@@ -111,7 +116,7 @@ def get_dashboard_data(
 
     logger.debug(
         "dashboard.get_dashboard_data params=%s",
-        (normalized_start_date, normalized_end_date, material_id, location_id),
+        (category_id, normalized_start_date, normalized_end_date, material_id, location_id),
     )
 
     params = _build_dashboard_query_params(
@@ -142,7 +147,7 @@ def get_dashboard_summary(
 
     logger.debug(
         "dashboard.get_dashboard_summary params=%s",
-        (normalized_start_date, normalized_end_date, material_id, location_id),
+        (category_id, normalized_start_date, normalized_end_date, material_id, location_id),
     )
 
     params = _build_dashboard_query_params(
@@ -161,6 +166,7 @@ def get_dashboard_summary(
 
 
 def get_dashboard_data_paginated(
+    category_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     material_id: Optional[int] = None,
@@ -180,6 +186,7 @@ def get_dashboard_data_paginated(
     logger.debug(
         "dashboard.get_dashboard_data_paginated params=%s",
         (
+            category_id,
             normalized_start_date,
             normalized_end_date,
             material_id,
