@@ -99,6 +99,7 @@ def _build_dashboard_query_params(
 
 
 def get_dashboard_data(
+    category_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     material_id: Optional[int] = None,
@@ -129,6 +130,7 @@ def get_dashboard_data(
 
 
 def get_dashboard_summary(
+    category_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     material_id: Optional[int] = None,
