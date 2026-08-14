@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
-
+from psycopg2.pool import ThreadedConnectionPool
+from contextlib import contextmanager
+import streamlit as st
 from typing import Dict, List
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -23,11 +25,22 @@ STOCK_OPNAME_QUERIES_DIR = os.path.join(DB_DIR, "stock_opname_queries")
 SALES_QUERIES_DIR = os.path.join(DB_DIR, "sales_queries")
 DASHBOARD_QUERIES_DIR = os.path.join(DB_DIR, "dashboard_queries")
 
+@st.cache_resource
+def get_connection_pool() -> ThreadedConnectionPool:
+    """Initialize a persistent thread-safe connection pool on startup."""
+    from constant.logger import logger
+    logger.info("Initializing psycopg2 ThreadedConnectionPool...")
+    return ThreadedConnectionPool(minconn=1, maxconn=10, dsn=DB_URI)
 
+@contextmanager
 def get_db_connection():
-    from constant.error_handling import connect_db
-
-    return connect_db(DB_URI)
+    """Context manager that borrows a connection from the pool and returns it automatically."""
+    pool = get_connection_pool()
+    conn = pool.getconn()
+    try:
+        yield conn
+    finally:
+        pool.putconn(conn)
 
 
 def load_sql_queries_from_directory(directory: str) -> Dict[str, str]:
