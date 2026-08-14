@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import psycopg2
 from typing import Dict, List
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
