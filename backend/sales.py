@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-
+from datetime import datetime
 from psycopg2.extras import RealDictCursor
 
 from constant.config import get_db_connection, load_sql_queries_from_directory, SALES_QUERIES_DIR
@@ -48,6 +48,24 @@ def create_sale(
 
     return dict(result)
 
+def get_next_sales_number() -> str:
+    """Fetch the next auto-incremented Sales number directly via SQL."""
+    logger.debug("sales.get_next_sales_number")
+    current_year = datetime.now().strftime("%Y")
+    prefix = f"SAL-{current_year}-"
+    
+    query = """
+        SELECT COALESCE(MAX(CAST(SUBSTRING(sales_number FROM '[0-9]+$') AS INT)), 0) + 1 
+        FROM sales 
+        WHERE sales_number LIKE %s;
+    """
+    
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (f"{prefix}%",))
+            result = cur.fetchone()
+            next_seq = result[0] if result else 1
+            return f"{prefix}{next_seq:05d}"
 
 def get_all_sales() -> List[Dict[str, Any]]:
     logger.debug("sales.get_all_sales")

@@ -96,3 +96,5 @@ def load_sql_queries_from_directories(directories: List[str]) -> Dict[str, str]:
             queries[query_name] = query_text
 
     return queries
+
+

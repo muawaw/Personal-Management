@@ -13,6 +13,7 @@ from backend.purchasing import (
     get_purchase_by_id,
     update_purchase,
     delete_purchase,
+    get_next_purchase_number
 )
 from backend.master_data import get_all_materials, get_all_locations
 
@@ -64,8 +65,13 @@ def render():
     location_map = {l["location_name"]: l["location_id"] for l in location_options}
 
     with st.expander("New Purchase", expanded=False):
+        next_po_number = get_next_purchase_number()
         with st.form("purchase_input_form"):
-            purchase_number = st.text_input("Purchase Number")
+            purchase_number = st.text_input(
+                "Purchase Number",
+                value=next_po_number,
+                disabled=True  # Read-only display prevents collision errors
+            )
             material_name = st.selectbox(
                 "Material", ["Select material"] + [m["material_name"] for m in material_options]
             )
@@ -89,14 +95,14 @@ def render():
                     try:
                         with st.spinner("Processing purchase..."):
                             create_purchase(
-                                purchase_number=purchase_number,
+                                purchase_number=next_po_number,
                                 material_id=material_map[material_name],
                                 location_id=location_map[location_name],
                                 quantity=quantity,
                                 unit_price=unit_price,
                                 purchase_date=purchase_date,
                             )
-                        st.session_state.purchase_msg = ("success", "Purchase saved successfully.")
+                        st.session_state.purchase_msg = ("success", f"Purchase {next_po_number} saved successfully.")
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save purchase: {exc}")

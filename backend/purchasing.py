@@ -1,4 +1,4 @@
-﻿from datetime import date
+﻿from datetime import date, datetime
 from typing import List, Dict, Any, Optional
 
 from psycopg2.extras import RealDictCursor
@@ -40,6 +40,24 @@ def create_purchase(purchase_number, material_id, location_id, quantity, unit_pr
 
     return dict(result) if result else None
 
+def get_next_purchase_number() -> str:
+    """Fetch the next auto-incremented PO number directly via SQL."""
+    logger.debug("purchasing.get_next_purchase_number")
+    current_year = datetime.now().strftime("%Y")
+    prefix = f"PUR-{current_year}-"
+    
+    query = """
+        SELECT COALESCE(MAX(CAST(SUBSTRING(purchase_number FROM '[0-9]+$') AS INT)), 0) + 1 
+        FROM purchasing
+        WHERE purchase_number LIKE %s;
+    """
+    
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (f"{prefix}%",))
+            result = cur.fetchone()
+            next_seq = result[0] if result else 1
+            return f"{prefix}{next_seq:05d}"
 
 def get_all_purchases() -> List[Dict[str, Any]]:
     logger.debug("purchasing.get_all_purchases")

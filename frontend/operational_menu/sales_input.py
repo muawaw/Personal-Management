@@ -13,6 +13,7 @@ from backend.sales import (
     get_sale_by_id,
     update_sale,
     delete_sale,
+    get_next_sales_number
 )
 from backend.master_data import get_all_materials, get_all_locations
 
@@ -64,8 +65,13 @@ def render():
     location_map = {l["location_name"]: l["location_id"] for l in location_options}
 
     with st.expander("New Sale", expanded=False):
+        next_so_number = get_next_sales_number()
         with st.form("sales_input_form"):
-            sales_number = st.text_input("Sales Number")
+            sales_number = st.text_input(
+                "Sales Number",
+                value=next_so_number,
+                disabled=True  # Read-only display prevents collision errors
+            )
             material_name = st.selectbox(
                 "Material", ["Select material"] + [m["material_name"] for m in material_options]
             )
@@ -89,14 +95,14 @@ def render():
                     try:
                         with st.spinner("Processing sale..."):
                             create_sale(
-                                sales_number=sales_number,
+                                sales_number=next_so_number,
                                 material_id=material_map[material_name],
                                 location_id=location_map[location_name],
                                 quantity=quantity,
                                 unit_price=unit_price,
                                 sales_date=sales_date,
                             )
-                        st.session_state.sales_msg = ("success", "Sale saved successfully.")
+                        st.session_state.sales_msg = ("success", f"Sale {next_so_number} saved successfully.")
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save sale: {exc}")

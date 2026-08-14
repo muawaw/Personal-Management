@@ -4,11 +4,14 @@ from typing import Any, Dict, List, Optional
 
 from psycopg2.extras import RealDictCursor
 
-from constant.config import get_db_connection, load_sql_queries_from_directory, DASHBOARD_QUERIES_DIR
+from constant.config import (
+    DASHBOARD_QUERIES_DIR,
+    get_db_connection,
+    load_sql_queries_from_directory,
+)
 from constant.error_handling import execute_query
 from constant.logger import logger
 
-# Cache queries on startup
 QUERIES = load_sql_queries_from_directory(DASHBOARD_QUERIES_DIR)
 
 DASHBOARD_FILTER_PRESETS = [
@@ -51,7 +54,9 @@ def get_dashboard_date_filter_range(filter_name: str) -> Dict[str, Optional[str]
 
     if filter_name == "previous_month":
         previous_month_end = current_month_start - timedelta(days=1)
-        previous_month_start = date(previous_month_end.year, previous_month_end.month, 1)
+        previous_month_start = date(
+            previous_month_end.year, previous_month_end.month, 1
+        )
         return {
             "start_date": previous_month_start.isoformat(),
             "end_date": previous_month_end.isoformat(),
@@ -84,23 +89,38 @@ def get_dashboard_date_filter_range(filter_name: str) -> Dict[str, Optional[str]
     raise ValueError(f"Unknown dashboard filter name: {filter_name}")
 
 
-def _build_dashboard_query_params(
+def _build_summary_query_params(
     start_date: Optional[date],
     end_date: Optional[date],
+    category_id: Optional[int],
     material_id: Optional[int],
     location_id: Optional[int],
 ) -> tuple[Any, ...]:
-    # Each CTE (purchase_agg, sales_agg, stock_agg) expects 8 positional params in sequence:
-    # (%s IS NULL OR start_date >= %s) AND (%s IS NULL OR end_date <= %s)
-    # AND (%s IS NULL OR material_id = %s) AND (%s IS NULL OR location_id = %s)
     cte_params = (
         start_date, start_date,
         end_date, end_date,
+        category_id, category_id,
         material_id, material_id,
         location_id, location_id,
     )
-    # 3 CTEs x 8 parameters = 24 parameters in total
     return cte_params * 3
+
+
+def _build_data_query_params(
+    start_date: Optional[date],
+    end_date: Optional[date],
+    category_id: Optional[int],
+    material_id: Optional[int],
+    location_id: Optional[int],
+) -> tuple[Any, ...]:
+    cte_params = (
+        start_date, start_date,
+        end_date, end_date,
+        category_id, category_id,
+        material_id, material_id,
+        location_id, location_id,
+    )
+    return (cte_params * 3) + (category_id, category_id)
 
 
 def get_dashboard_data(
@@ -110,18 +130,13 @@ def get_dashboard_data(
     material_id: Optional[int] = None,
     location_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Return dashboard aggregates filtered by date, material, and location."""
     normalized_start_date = _normalize_date(start_date)
     normalized_end_date = _normalize_date(end_date)
 
-    logger.debug(
-        "dashboard.get_dashboard_data params=%s",
-        (category_id, normalized_start_date, normalized_end_date, material_id, location_id),
-    )
-
-    params = _build_dashboard_query_params(
+    params = _build_data_query_params(
         normalized_start_date,
         normalized_end_date,
+        category_id,
         material_id,
         location_id,
     )
@@ -141,18 +156,13 @@ def get_dashboard_summary(
     material_id: Optional[int] = None,
     location_id: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Return a dashboard summary row with totals and margin estimations."""
     normalized_start_date = _normalize_date(start_date)
     normalized_end_date = _normalize_date(end_date)
 
-    logger.debug(
-        "dashboard.get_dashboard_summary params=%s",
-        (category_id, normalized_start_date, normalized_end_date, material_id, location_id),
-    )
-
-    params = _build_dashboard_query_params(
+    params = _build_summary_query_params(
         normalized_start_date,
         normalized_end_date,
+        category_id,
         material_id,
         location_id,
     )
@@ -163,7 +173,6 @@ def get_dashboard_summary(
             result = cur.fetchone()
 
     return dict(result) if result else {}
-
 
 def get_dashboard_data_paginated(
     category_id: Optional[int] = None,
@@ -196,9 +205,10 @@ def get_dashboard_data_paginated(
         ),
     )
 
-    params = _build_dashboard_query_params(
+    params = _build_data_query_params(
         normalized_start_date,
         normalized_end_date,
+        category_id,
         material_id,
         location_id,
     ) + (page_size, (page - 1) * page_size)

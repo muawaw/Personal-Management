@@ -15,6 +15,7 @@ from backend.stock_opname import (
     delete_stock_opname,
 )
 from backend.master_data import get_all_materials, get_all_locations
+from backend.inventory import get_all_inventory
 
 
 @st.dialog("Confirm Deletion")
@@ -59,25 +60,50 @@ def render():
 
     material_options = get_all_materials()
     location_options = get_all_locations()
+    inventory_options = get_all_inventory()
 
     material_map = {m["material_name"]: m["material_id"] for m in material_options}
     location_map = {l["location_name"]: l["location_id"] for l in location_options}
-
+    inventory_map = {
+    (i["material_id"], i["location_id"]): i["stock_qty"] 
+    for i in inventory_options 
+    if "material_id" in i and "location_id" in i
+    }
+    
     with st.expander("New Stock Opname", expanded=False):
-        with st.form("stock_opname_input_form"):
+        c_mat, c_loc = st.columns(2)
+        with c_mat:
             material_name = st.selectbox(
-                "Material", ["Select material"] + [m["material_name"] for m in material_options]
+                "Material", 
+                ["Select material"] + [m["material_name"] for m in material_options],
+                key="so_material_select"
             )
+        with c_loc:
             location_name = st.selectbox(
-                "Location", ["Select location"] + [l["location_name"] for l in location_options]
+                "Location", 
+                ["Select location"] + [l["location_name"] for l in location_options],
+                key="so_location_select"
             )
-            
+
+        fetched_system_qty = 0.0
+        if material_name != "Select material" and location_name != "Select location":
+            mat_id = material_map[material_name]
+            loc_id = location_map[location_name]
+            fetched_system_qty = float(inventory_map.get((mat_id, loc_id), 0.0))
+
+        # st.divider()
+        with st.form("stock_opname_input_form"):
             c1, c2 = st.columns(2)
             with c1:
-                system_qty = st.number_input("System Qty", min_value=0.0, value=0.0, step=1.0)
+                system_qty = st.number_input(
+                    "System Qty", 
+                    value=fetched_system_qty, 
+                    disabled=True,
+                    key=f"system_qty_{material_name}_{location_name}"
+                )
             with c2:
                 actual_qty = st.number_input("Actual Qty", min_value=0.0, value=0.0, step=1.0)
-            
+                            
             stock_opname_date = st.date_input("Stock Opname Date", value=date.today())
             notes = st.text_area("Notes", value="")
 
